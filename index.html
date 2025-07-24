@@ -2,7 +2,7 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1" name="viewport" />
-  <title>Datacaixa POS com Aba Estoque, Comandas e Financeiro</title>
+  <title>Datacaixa POS com Aba Estoque, Comandas, Financeiro e Delivery</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
@@ -125,6 +125,19 @@
       margin-left: 4px;
       user-select: none;
     }
+    /* Modal styles for delivery form */
+    #modalDelivery {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+    }
+    #modalDelivery.active {
+      display: flex;
+    }
   </style>
 </head>
 <body class="bg-[#0f3a7d] font-sans select-none">
@@ -167,8 +180,8 @@
           <span>Pedido</span>
           <span id="badgePedidos" class="absolute -top-1 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md select-none hidden">0</span>
         </button>
-        <button class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
-          <i class="fas fa-truck"></i>
+        <button id="btnDelivery" class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
+          <i class="fas fa-motorcycle"></i>
           <span>Delivery</span>
         </button>
         <button
@@ -219,6 +232,38 @@
               Fechar
             </button>
           </div>
+        </div>
+      </div>
+      <div
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60"
+        id="modalDelivery"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalDeliveryTitle"
+      >
+        <div class="bg-white rounded-lg max-w-lg w-full p-6 max-h-[80vh] overflow-auto">
+          <h2 class="text-xl font-bold mb-4 text-[#0f3a7d] select-text" id="modalDeliveryTitle">Informações para Delivery</h2>
+          <form id="formDelivery" class="space-y-4">
+            <div>
+              <label for="clienteNome" class="block text-sm font-semibold text-[#0f3a7d] mb-1">Nome do Cliente</label>
+              <input type="text" id="clienteNome" name="clienteNome" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563eb]" />
+            </div>
+            <div>
+              <label for="enderecoColeta" class="block text-sm font-semibold text-[#0f3a7d] mb-1">Endereço de Coleta</label>
+              <input type="text" id="enderecoColeta" name="enderecoColeta" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563eb]" />
+            </div>
+            <div>
+              <label for="enderecoEntrega" class="block text-sm font-semibold text-[#0f3a7d] mb-1">Endereço de Entrega</label>
+              <input type="text" id="enderecoEntrega" name="enderecoEntrega" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563eb]" />
+            </div>
+            <div id="deliveryRates" class="text-sm text-gray-700 space-y-2">
+              <p>Consultando taxas de entrega...</p>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4">
+              <button type="button" id="btnCancelDelivery" class="px-4 py-2 bg-gray-400 rounded hover:bg-gray-500 text-white font-semibold transition">Cancelar</button>
+              <button type="submit" id="btnConfirmDelivery" class="px-4 py-2 bg-green-700 rounded hover:bg-green-800 text-white font-semibold transition">Confirmar</button>
+            </div>
+          </form>
         </div>
       </div>
       <section class="flex-1 p-4 space-y-3" id="vendaSection">
@@ -345,6 +390,13 @@
           </div>
         </div>
       </section>
+      <section
+        class="hidden flex-1 p-4 space-y-4 bg-white rounded border border-[#0a2a5a] overflow-auto max-h-[calc(100vh-120px)]"
+        id="deliverySection"
+      >
+        <h2 class="text-[#0f3a7d] font-bold text-lg mb-4 select-text">Pedidos para Delivery</h2>
+        <div id="deliveryPedidosContainer" class="space-y-4 overflow-auto max-h-[calc(100vh-160px)]"></div>
+      </section>
       <aside class="w-full md:w-[400px] bg-[#0a2a5a] p-4 flex flex-col space-y-4 border-l border-[#0a2a5a]">
         <form class="flex space-x-4 relative items-center">
           <div class="flex-1 flex items-center">
@@ -405,7 +457,7 @@
             Em Aberto
           </button>
           <button
-            id="btnImprimirComandaCard"
+            id="btnImprimirComanda"
             type="button"
             class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1 rounded shadow transition"
             aria-label="Imprimir comanda"
@@ -478,7 +530,7 @@
       const estoqueLista = document.getElementById("estoqueLista");
       const comandaCardsContainer = document.getElementById("comandaCardsContainer");
       const produtosGrid = document.getElementById("produtosGrid");
-      const btnImprimirComanda = document.getElementById("btnImprimirComanda");
+      const btnImprimirComanda = document.querySelectorAll("#btnImprimirComanda");
       const btnAbrirComandaMesa = document.getElementById("btnAbrirComandaMesa");
       const mesaStatusBadge = document.getElementById("mesaStatusBadge");
       const relatorioEstoqueBody = document.getElementById("relatorioEstoqueBody");
@@ -486,6 +538,13 @@
       const btnPedidos = document.getElementById("btnPedidos");
       const badgePedidos = document.getElementById("badgePedidos");
       const contadorMesasAbertas = document.getElementById("contadorMesasAbertas");
+      const btnDelivery = document.getElementById("btnDelivery");
+      const deliverySection = document.getElementById("deliverySection");
+      const deliveryPedidosContainer = document.getElementById("deliveryPedidosContainer");
+      const modalDelivery = document.getElementById("modalDelivery");
+      const formDelivery = document.getElementById("formDelivery");
+      const btnCancelDelivery = document.getElementById("btnCancelDelivery");
+      const deliveryRatesDiv = document.getElementById("deliveryRates");
 
       let mesaSelecionada = null;
       let comanda = {};
@@ -494,6 +553,7 @@
       let vendasFinalizadas = [];
       const timers = {};
       let pedidosAbertos = [];
+      let pedidosDelivery = [];
 
       const estoqueDados = {
         refri: [
@@ -1111,6 +1171,7 @@
           vendaSection.classList.remove("hidden");
           estoqueSection.classList.add("hidden");
           financeiroSection.classList.add("hidden");
+          deliverySection.classList.add("hidden");
           return;
         }
         comandasFinalizadas.forEach((card) => {
@@ -1120,6 +1181,7 @@
         vendaSection.classList.add("hidden");
         estoqueSection.classList.add("hidden");
         financeiroSection.classList.add("hidden");
+        deliverySection.classList.add("hidden");
       }
 
       function atualizarBotaoAtivo(container, clickedBtn) {
@@ -1156,6 +1218,7 @@
           vendaSection.classList.add("hidden");
           estoqueSection.classList.add("hidden");
           financeiroSection.classList.add("hidden");
+          deliverySection.classList.add("hidden");
           return;
         }
         pedidosAbertos.forEach((pedido, idx) => {
@@ -1202,7 +1265,20 @@
           if (btnEntregar) {
             btnEntregar.addEventListener("click", () => {
               pedido.entregue = true;
+              // Mover para delivery
+              pedidosDelivery.push({
+                mesa: pedido.mesa,
+                itens: JSON.parse(JSON.stringify(pedido.itens)),
+                total: pedido.total,
+                clienteNome: "",
+                enderecoColeta: "",
+                enderecoEntrega: "",
+                status: "pendente"
+              });
+              pedidosAbertos.splice(idx, 1);
+              atualizarBadgePedidos();
               mostrarPedidos();
+              alert("Pedido enviado para a aba Delivery. Por favor, preencha as informações de entrega.");
             });
           }
 
@@ -1212,7 +1288,156 @@
         vendaSection.classList.add("hidden");
         estoqueSection.classList.add("hidden");
         financeiroSection.classList.add("hidden");
+        deliverySection.classList.add("hidden");
       }
+
+      function mostrarDelivery() {
+        deliveryPedidosContainer.innerHTML = "";
+        if (pedidosDelivery.length === 0) {
+          deliveryPedidosContainer.innerHTML = '<p class="text-gray-500 select-text">Nenhum pedido para delivery.</p>';
+          deliverySection.classList.remove("hidden");
+          vendaSection.classList.add("hidden");
+          estoqueSection.classList.add("hidden");
+          financeiroSection.classList.add("hidden");
+          comandaCardsContainer.classList.add("hidden");
+          return;
+        }
+        pedidosDelivery.forEach((pedido, idx) => {
+          const card = document.createElement("div");
+          card.className = "border border-[#0f3a7d] rounded p-4 shadow-md relative";
+
+          let itensHtml = "";
+          pedido.itens.forEach((item) => {
+            const totalItem = item.price * item.qtde;
+            itensHtml += `
+              <div class="flex items-center space-x-3 mb-2">
+                <img src="${item.img || 'https://placehold.co/40x40/png?text=Sem+Imagem'}" alt="Imagem do produto ${item.name}, embalagem padrão" class="w-10 h-10 rounded object-cover" />
+                <div class="flex-1">
+                  <div class="font-semibold text-[#0f3a7d]">${item.name}</div>
+                  <div class="text-sm text-gray-600">Qtd: ${item.qtde} x R$ ${item.price.toFixed(2).replace('.', ',')}</div>
+                </div>
+                <div class="font-semibold text-[#0f3a7d]">R$ ${totalItem.toFixed(2).replace('.', ',')}</div>
+              </div>
+            `;
+          });
+
+          const status = pedido.status || "pendente";
+
+          card.innerHTML = `
+            <h3 class="text-lg font-bold text-[#0f3a7d] mb-3 select-text">Delivery - ${pedido.mesa}</h3>
+            ${itensHtml}
+            <div class="mb-2">
+              <strong>Cliente:</strong> ${pedido.clienteNome || '<em>Não informado</em>'}<br/>
+              <strong>Endereço Coleta:</strong> ${pedido.enderecoColeta || '<em>Não informado</em>'}<br/>
+              <strong>Endereço Entrega:</strong> ${pedido.enderecoEntrega || '<em>Não informado</em>'}
+            </div>
+            <div class="text-right font-bold text-[#0f3a7d] border-t border-gray-300 pt-2 mb-4">Total: R$ ${pedido.total.toFixed(2).replace('.', ',')}</div>
+            <div class="flex space-x-2 justify-between items-center">
+              <div id="rateInfo-${idx}" class="text-sm text-gray-700">Consultando taxas de entrega...</div>
+              <div class="flex space-x-2">
+                ${status === "pendente" ? `<button type="button" class="btn-editar-delivery bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Editar delivery">Editar</button>` : ''}
+                <button type="button" class="btn-remover-delivery bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Remover delivery">Remover</button>
+              </div>
+            </div>
+          `;
+
+          const btnRemover = card.querySelector(".btn-remover-delivery");
+          btnRemover.addEventListener("click", () => {
+            pedidosDelivery.splice(idx, 1);
+            mostrarDelivery();
+          });
+
+          const btnEditar = card.querySelector(".btn-editar-delivery");
+          if (btnEditar) {
+            btnEditar.addEventListener("click", () => {
+              abrirModalDelivery(pedido, idx);
+            });
+          }
+
+          deliveryPedidosContainer.appendChild(card);
+
+          // Consultar taxas de entrega para este pedido
+          consultarTaxasEntrega(pedido, idx);
+        });
+        deliverySection.classList.remove("hidden");
+        vendaSection.classList.add("hidden");
+        estoqueSection.classList.add("hidden");
+        financeiroSection.classList.add("hidden");
+        comandaCardsContainer.classList.add("hidden");
+      }
+
+      // Modal delivery form open with data
+      let currentDeliveryEditIndex = null;
+      function abrirModalDelivery(pedido, idx) {
+        currentDeliveryEditIndex = idx;
+        formDelivery.clienteNome.value = pedido.clienteNome || "";
+        formDelivery.enderecoColeta.value = pedido.enderecoColeta || "";
+        formDelivery.enderecoEntrega.value = pedido.enderecoEntrega || "";
+        deliveryRatesDiv.innerHTML = '<p>Consultando taxas de entrega...</p>';
+        modalDelivery.classList.add("active");
+        consultarTaxasEntrega(pedido, idx, true);
+      }
+
+      function fecharModalDelivery() {
+        modalDelivery.classList.remove("active");
+        currentDeliveryEditIndex = null;
+      }
+
+      // Simulação de consulta de taxas de entrega (sandbox)
+      // Como não é possível usar APIs reais, simulamos com valores fixos e delay
+      function consultarTaxasEntrega(pedido, idx, isModal = false) {
+        const rateInfoEl = isModal ? deliveryRatesDiv : document.getElementById(`rateInfo-${idx}`);
+        if (!rateInfoEl) return;
+        rateInfoEl.textContent = "Consultando taxas de entrega...";
+
+        // Simular delay
+        setTimeout(() => {
+          // Simular valores aleatórios para Uber e 99
+          const uberRate = (Math.random() * 10 + 5).toFixed(2);
+          const noventaENoveRate = (Math.random() * 10 + 4).toFixed(2);
+
+          const html = `
+            <div><strong>Uber:</strong> R$ ${uberRate.replace('.', ',')}</div>
+            <div><strong>99:</strong> R$ ${noventaENoveRate.replace('.', ',')}</div>
+          `;
+          rateInfoEl.innerHTML = html;
+
+          // Se estiver no modal, armazenar as taxas para possível uso futuro
+          if (isModal && currentDeliveryEditIndex !== null) {
+            pedidosDelivery[currentDeliveryEditIndex].uberRate = uberRate;
+            pedidosDelivery[currentDeliveryEditIndex].noventaENoveRate = noventaENoveRate;
+          }
+        }, 1500);
+      }
+
+      // Event listeners for delivery modal buttons
+      btnCancelDelivery.addEventListener("click", () => {
+        fecharModalDelivery();
+      });
+
+      formDelivery.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (currentDeliveryEditIndex === null) return;
+
+        const clienteNome = formDelivery.clienteNome.value.trim();
+        const enderecoColeta = formDelivery.enderecoColeta.value.trim();
+        const enderecoEntrega = formDelivery.enderecoEntrega.value.trim();
+
+        if (!clienteNome || !enderecoColeta || !enderecoEntrega) {
+          alert("Por favor, preencha todos os campos.");
+          return;
+        }
+
+        // Atualizar dados do pedido delivery
+        pedidosDelivery[currentDeliveryEditIndex].clienteNome = clienteNome;
+        pedidosDelivery[currentDeliveryEditIndex].enderecoColeta = enderecoColeta;
+        pedidosDelivery[currentDeliveryEditIndex].enderecoEntrega = enderecoEntrega;
+        pedidosDelivery[currentDeliveryEditIndex].status = "confirmado";
+
+        fecharModalDelivery();
+        mostrarDelivery();
+        alert("Informações de delivery atualizadas com sucesso.");
+      });
 
       const btnsFiltroVenda = document.querySelectorAll("#vendaSection > div > button");
       btnsFiltroVenda.forEach(btn => {
@@ -1237,10 +1462,12 @@
         estoqueSection.classList.remove("hidden");
         financeiroSection.classList.add("hidden");
         comandaCardsContainer.classList.add("hidden");
+        deliverySection.classList.add("hidden");
         btnEstoque.classList.add("text-[#f97316]");
         btnVenda.classList.remove("text-[#f97316]");
         btnFinanceiro.classList.remove("text-[#f97316]");
         btnPedidos.classList.remove("text-[#f97316]");
+        btnDelivery.classList.remove("text-[#f97316]");
       });
 
       btnVenda.addEventListener("click", () => {
@@ -1248,10 +1475,12 @@
         estoqueSection.classList.add("hidden");
         financeiroSection.classList.add("hidden");
         comandaCardsContainer.classList.add("hidden");
+        deliverySection.classList.add("hidden");
         btnEstoque.classList.remove("text-[#f97316]");
         btnVenda.classList.add("text-[#f97316]");
         btnFinanceiro.classList.remove("text-[#f97316]");
         btnPedidos.classList.remove("text-[#f97316]");
+        btnDelivery.classList.remove("text-[#f97316]");
       });
 
       btnFinanceiro.addEventListener("click", () => {
@@ -1259,10 +1488,12 @@
         estoqueSection.classList.add("hidden");
         financeiroSection.classList.remove("hidden");
         comandaCardsContainer.classList.add("hidden");
+        deliverySection.classList.add("hidden");
         btnEstoque.classList.remove("text-[#f97316]");
         btnVenda.classList.remove("text-[#f97316]");
         btnFinanceiro.classList.add("text-[#f97316]");
         btnPedidos.classList.remove("text-[#f97316]");
+        btnDelivery.classList.remove("text-[#f97316]");
         atualizarPainelFinanceiro();
       });
 
@@ -1272,6 +1503,16 @@
         btnVenda.classList.remove("text-[#f97316]");
         btnFinanceiro.classList.remove("text-[#f97316]");
         btnPedidos.classList.add("text-[#f97316]");
+        btnDelivery.classList.remove("text-[#f97316]");
+      });
+
+      btnDelivery.addEventListener("click", () => {
+        mostrarDelivery();
+        btnEstoque.classList.remove("text-[#f97316]");
+        btnVenda.classList.remove("text-[#f97316]");
+        btnFinanceiro.classList.remove("text-[#f97316]");
+        btnPedidos.classList.remove("text-[#f97316]");
+        btnDelivery.classList.add("text-[#f97316]");
       });
 
       btnMesasOpen.addEventListener("click", abrirModal);
@@ -1300,7 +1541,9 @@
         mostrarComandas();
       });
 
-      btnImprimirComanda.addEventListener("click", imprimirComanda);
+      btnImprimirComanda.forEach(btn => {
+        btn.addEventListener("click", imprimirComanda);
+      });
 
       btnAbrirComandaMesa.addEventListener("click", () => {
         if (!mesaSelecionada) {
@@ -1372,4 +1615,4 @@
     })();
   </script>
 </body>
-</html>
+  </html>
