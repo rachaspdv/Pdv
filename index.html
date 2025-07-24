@@ -180,9 +180,10 @@
           <span>Pedido</span>
           <span id="badgePedidos" class="absolute -top-1 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md select-none hidden">0</span>
         </button>
-        <button id="btnDelivery" class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
+        <button id="btnDelivery" class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d] relative">
           <i class="fas fa-motorcycle"></i>
           <span>Delivery</span>
+          <span id="badgeDelivery" class="absolute -top-1 -right-2 bg-green-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md select-none hidden">0</span>
         </button>
         <button
           class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]"
@@ -394,7 +395,10 @@
         class="hidden flex-1 p-4 space-y-4 bg-white rounded border border-[#0a2a5a] overflow-auto max-h-[calc(100vh-120px)]"
         id="deliverySection"
       >
-        <h2 class="text-[#0f3a7d] font-bold text-lg mb-4 select-text">Pedidos para Delivery</h2>
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-[#0f3a7d] font-bold text-lg select-text">Pedidos para Delivery</h2>
+          <span id="contadorDelivery" class="bg-green-600 text-white rounded-full px-3 py-1 text-sm font-semibold select-none hidden"></span>
+        </div>
         <div id="deliveryPedidosContainer" class="space-y-4 overflow-auto max-h-[calc(100vh-160px)]"></div>
       </section>
       <aside class="w-full md:w-[400px] bg-[#0a2a5a] p-4 flex flex-col space-y-4 border-l border-[#0a2a5a]">
@@ -545,6 +549,8 @@
       const formDelivery = document.getElementById("formDelivery");
       const btnCancelDelivery = document.getElementById("btnCancelDelivery");
       const deliveryRatesDiv = document.getElementById("deliveryRates");
+      const badgeDelivery = document.getElementById("badgeDelivery");
+      const contadorDelivery = document.getElementById("contadorDelivery");
 
       let mesaSelecionada = null;
       let comanda = {};
@@ -837,6 +843,19 @@
         }
       }
 
+      function atualizarBadgeDelivery() {
+        const count = pedidosDelivery.length;
+        if (count > 0) {
+          badgeDelivery.textContent = count;
+          badgeDelivery.classList.remove("hidden");
+          contadorDelivery.textContent = count;
+          contadorDelivery.classList.remove("hidden");
+        } else {
+          badgeDelivery.classList.add("hidden");
+          contadorDelivery.classList.add("hidden");
+        }
+      }
+
       function renderizarEstoque(categoria) {
         estoqueLista.innerHTML = "";
         let itens = [];
@@ -985,12 +1004,11 @@
         let total = 0;
         comandaBody.innerHTML = "";
         itens.forEach((item, index) => {
-          const tr = document.createElement("tr");
-          tr.className = "border-b border-[#f97316]";
-
           const totalItem = item.price * item.qtde;
           total += totalItem;
 
+          tr = document.createElement("tr");
+          tr.className = "border-b border-[#f97316]";
           tr.innerHTML = `
             <td class="px-3 py-2">
               <img src="${item.img || 'https://placehold.co/40x40/png?text=Sem+Imagem'}" alt="Imagem do produto ${item.name}, embalagem padrão" class="w-10 h-10 rounded object-cover" />
@@ -1050,12 +1068,11 @@
         });
         texto += `\nTotal: R$ ${total.toFixed(2).replace('.', ',')}`;
 
+        // Apenas abrir o arquivo de impressão sem chamar print()
         const printWindow = window.open('', '', 'width=400,height=600');
         printWindow.document.write('<pre style="font-family:sans-serif; font-size:16px;">' + texto + '</pre>');
         printWindow.document.close();
         printWindow.focus();
-        printWindow.print();
-        printWindow.close();
       }
 
       function armazenarComandaCard(mesa, itens) {
@@ -1151,12 +1168,11 @@
           });
           texto += `\nTotal: R$ ${totalPrint.toFixed(2).replace('.', ',')}`;
 
+          // Apenas abrir o arquivo de impressão sem chamar print()
           const printWindow = window.open('', '', 'width=400,height=600');
           printWindow.document.write('<pre style="font-family:sans-serif; font-size:16px;">' + texto + '</pre>');
           printWindow.document.close();
           printWindow.focus();
-          printWindow.print();
-          printWindow.close();
         });
 
         comandasFinalizadas.push(card);
@@ -1300,6 +1316,7 @@
           estoqueSection.classList.add("hidden");
           financeiroSection.classList.add("hidden");
           comandaCardsContainer.classList.add("hidden");
+          atualizarBadgeDelivery();
           return;
         }
         pedidosDelivery.forEach((pedido, idx) => {
@@ -1323,6 +1340,14 @@
 
           const status = pedido.status || "pendente";
 
+          // Check if delivery info is filled to show print button
+          const temInfoEntrega = pedido.clienteNome && pedido.enderecoColeta && pedido.enderecoEntrega;
+
+          let printButtonHtml = "";
+          if (temInfoEntrega) {
+            printButtonHtml = `<button type="button" class="btn-imprimir-delivery bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Imprimir delivery">Imprimir</button>`;
+          }
+
           card.innerHTML = `
             <h3 class="text-lg font-bold text-[#0f3a7d] mb-3 select-text">Delivery - ${pedido.mesa}</h3>
             ${itensHtml}
@@ -1337,6 +1362,7 @@
               <div class="flex space-x-2">
                 ${status === "pendente" ? `<button type="button" class="btn-editar-delivery bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Editar delivery">Editar</button>` : ''}
                 <button type="button" class="btn-remover-delivery bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Remover delivery">Remover</button>
+                ${printButtonHtml}
               </div>
             </div>
           `;
@@ -1354,16 +1380,41 @@
             });
           }
 
+          const btnImprimirDelivery = card.querySelector(".btn-imprimir-delivery");
+          if (btnImprimirDelivery) {
+            btnImprimirDelivery.addEventListener("click", () => {
+              if (!pedido || !pedido.itens || pedido.itens.length === 0) {
+                alert("Nenhum pedido para imprimir.");
+                return;
+              }
+              let texto = `Delivery - ${pedido.mesa}\n\nCliente: ${pedido.clienteNome}\nEndereço Coleta: ${pedido.enderecoColeta}\nEndereço Entrega: ${pedido.enderecoEntrega}\n\nItens:\n`;
+              let totalPrint = 0;
+              pedido.itens.forEach(item => {
+                const totalItem = item.price * item.qtde;
+                totalPrint += totalItem;
+                texto += `${item.name} - Qtde: ${item.qtde} x R$ ${item.price.toFixed(2).replace('.', ',')} = R$ ${totalItem.toFixed(2).replace('.', ',')}\n`;
+              });
+              texto += `\nTotal: R$ ${totalPrint.toFixed(2).replace('.', ',')}`;
+
+              // Apenas abrir o arquivo de impressão sem chamar print()
+              const printWindow = window.open('', '', 'width=400,height=600');
+              printWindow.document.write('<pre style="font-family:sans-serif; font-size:16px;">' + texto + '</pre>');
+              printWindow.document.close();
+              printWindow.focus();
+            });
+          }
+
           deliveryPedidosContainer.appendChild(card);
 
-          // Consultar taxas de entrega para este pedido
-          consultarTaxasEntrega(pedido, idx);
+          // Consultar taxas de entrega para este pedido e atualizar preço total com entrega
+          consultarTaxasEntrega(pedido, idx, false, true);
         });
         deliverySection.classList.remove("hidden");
         vendaSection.classList.add("hidden");
         estoqueSection.classList.add("hidden");
         financeiroSection.classList.add("hidden");
         comandaCardsContainer.classList.add("hidden");
+        atualizarBadgeDelivery();
       }
 
       // Modal delivery form open with data
@@ -1375,7 +1426,7 @@
         formDelivery.enderecoEntrega.value = pedido.enderecoEntrega || "";
         deliveryRatesDiv.innerHTML = '<p>Consultando taxas de entrega...</p>';
         modalDelivery.classList.add("active");
-        consultarTaxasEntrega(pedido, idx, true);
+        consultarTaxasEntrega(pedido, idx, true, false);
       }
 
       function fecharModalDelivery() {
@@ -1384,17 +1435,24 @@
       }
 
       // Simulação de consulta de taxas de entrega (sandbox)
-      // Como não é possível usar APIs reais, simulamos com valores fixos e delay
-      function consultarTaxasEntrega(pedido, idx, isModal = false) {
+      // Agora calcula preço real baseado nos endereços de coleta e entrega adicionados na comanda
+      // Como não é possível usar APIs reais, simulamos com valores fixos e delay, mas agora com base nos endereços
+      function consultarTaxasEntrega(pedido, idx, isModal = false, atualizarPrecoTotal = false) {
         const rateInfoEl = isModal ? deliveryRatesDiv : document.getElementById(`rateInfo-${idx}`);
+        const deliveryPriceTotalEl = atualizarPrecoTotal ? document.getElementById(`deliveryPriceTotal-${idx}`) : null;
         if (!rateInfoEl) return;
         rateInfoEl.textContent = "Consultando taxas de entrega...";
 
         // Simular delay
         setTimeout(() => {
-          // Simular valores aleatórios para Uber e 99
-          const uberRate = (Math.random() * 10 + 5).toFixed(2);
-          const noventaENoveRate = (Math.random() * 10 + 4).toFixed(2);
+          // Simular cálculo de distância baseado no comprimento dos endereços (simples proxy)
+          const coletaLen = pedido.enderecoColeta ? pedido.enderecoColeta.length : 0;
+          const entregaLen = pedido.enderecoEntrega ? pedido.enderecoEntrega.length : 0;
+          const distanciaSimulada = Math.abs(entregaLen - coletaLen) + 5; // base mínima 5 km
+
+          // Simular valores para Uber e 99 baseados na distância simulada
+          const uberRate = (distanciaSimulada * 1.5 + 3).toFixed(2);
+          const noventaENoveRate = (distanciaSimulada * 1.3 + 2.5).toFixed(2);
 
           const html = `
             <div><strong>Uber:</strong> R$ ${uberRate.replace('.', ',')}</div>
@@ -1406,6 +1464,15 @@
           if (isModal && currentDeliveryEditIndex !== null) {
             pedidosDelivery[currentDeliveryEditIndex].uberRate = uberRate;
             pedidosDelivery[currentDeliveryEditIndex].noventaENoveRate = noventaENoveRate;
+          }
+
+          // Atualizar preço total com entrega na lista de delivery
+          if (atualizarPrecoTotal && deliveryPriceTotalEl) {
+            const precoItens = pedido.total || 0;
+            // Escolher menor taxa para mostrar preço total mais atrativo
+            const menorTaxa = Math.min(parseFloat(uberRate), parseFloat(noventaENoveRate));
+            const precoTotalComEntrega = precoItens + menorTaxa;
+            deliveryPriceTotalEl.textContent = `Preço Total com Entrega: R$ ${precoTotalComEntrega.toFixed(2).replace('.', ',')}`;
           }
         }, 1500);
       }
@@ -1606,6 +1673,7 @@
         atualizarPainelFinanceiro();
         atualizarBadgePedidos();
         atualizarContadorMesasAbertas();
+        atualizarBadgeDelivery();
       }
 
       init();
@@ -1615,4 +1683,4 @@
     })();
   </script>
 </body>
-  </html>
+</html>
