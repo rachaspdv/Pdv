@@ -1,0 +1,782 @@
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1" name="viewport" />
+  <title>Datacaixa POS com Aba Estoque e Comandas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+    rel="stylesheet"
+  />
+  <style>
+    /* Custom scrollbar for the product list */
+    .scrollbar-thin::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #0a2a5a;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background-color: #2563eb;
+      border-radius: 10px;
+    }
+    .timer {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: #f97316;
+      min-width: 48px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body class="bg-[#0f3a7d] font-sans select-none">
+  <div class="max-w-[1200px] mx-auto mt-6 rounded-lg shadow-lg bg-[#0f3a7d] border border-[#0a2a5a]">
+    <!-- Header -->
+    <header
+      class="flex flex-col md:flex-row items-center justify-between bg-[#0a2a5a] rounded-t-lg px-6 py-3 text-white select-none space-y-2 md:space-y-0"
+    >
+      <div class="flex items-center space-x-4 w-full md:w-auto relative">
+        <button
+          class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer relative"
+          id="btnMesasOpen"
+          title="Abrir seleção de mesas ou balcão"
+          type="button"
+        >
+          <i class="fas fa-utensils"></i>
+          <span>Mesa</span>
+        </button>
+        <span id="mesaStatusBadge" class="absolute -top-2 -right-6 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md hidden" title="Mesa com comanda guardada">!</span>
+        <button
+          id="btnAbrirComandaMesa"
+          class="bg-[#f97316] text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-[#ea580c] transition"
+          title="Abrir comanda guardada da mesa selecionada"
+          type="button"
+          disabled
+        >
+          <i class="fas fa-folder-open"></i>
+        </button>
+      </div>
+      <nav class="flex flex-wrap justify-center md:justify-end items-center gap-3 w-full md:w-auto text-sm font-semibold">
+        <button
+          class="flex items-center space-x-1 bg-[#f97316] px-4 py-2 rounded shadow-md hover:bg-[#ea580c] transition"
+          id="btnVenda"
+        >
+          <i class="fas fa-cash-register"></i>
+          <span>PDV</span>
+        </button>
+        <button class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
+          <span>Pedido</span>
+        </button>
+        <button class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
+          <i class="fas fa-truck"></i>
+          <span>Delivery</span>
+        </button>
+        <button class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer px-3 py-2 rounded hover:bg-[#0f3a7d]">
+          <i class="fas fa-dollar-sign"></i>
+          <span>Financeiro</span>
+        </button>
+        <button
+          class="flex items-center space-x-1 hover:text-[#f97316] transition cursor-pointer text-[#f97316] px-3 py-2 rounded"
+          id="btnEstoque"
+          title="Abrir aba Estoque"
+          type="button"
+        >
+          <i class="fas fa-boxes"></i>
+          <span>Estoque</span>
+        </button>
+      </nav>
+    </header>
+    <div class="flex flex-col md:flex-row border-t border-[#0a2a5a] relative min-h-[600px]">
+      <!-- Modal Mesas e Balcão -->
+      <div
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        id="modalMesas"
+      >
+        <div
+          aria-labelledby="modalTitle"
+          aria-modal="true"
+          class="bg-white rounded-lg max-w-md w-full p-6 max-h-[80vh] overflow-auto"
+          role="dialog"
+        >
+          <h2 class="text-xl font-bold mb-4 text-[#0f3a7d] select-text" id="modalTitle">
+            Selecione a Mesa ou Balcão
+          </h2>
+          <div class="grid grid-cols-4 gap-3" id="mesasGrid"></div>
+          <div class="mt-6 flex justify-end space-x-3">
+            <button
+              class="px-4 py-2 bg-[#0f3a7d] text-white rounded hover:bg-[#0a2a5a] transition"
+              id="btnFecharMesas"
+              type="button"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Left side: Categories and products -->
+      <section class="flex-1 p-4 space-y-3" id="vendaSection">
+        <!-- Categories -->
+        <div class="flex space-x-3 mb-3">
+          <button
+            class="flex-1 bg-white text-[#0f3a7d] font-bold text-xs py-2 rounded border border-[#0a2a5a] hover:bg-[#e0e7ff] transition flex items-center justify-center space-x-2"
+            id="btnCatPDV"
+          >
+            <i class="fas fa-th-large"></i>
+            <span>PDV</span>
+          </button>
+          <button
+            class="flex-1 bg-white text-[#0f3a7d] font-bold text-xs py-2 rounded border border-[#0a2a5a] hover:bg-[#e0e7ff] transition flex items-center justify-center space-x-2"
+            id="btnCatRefri"
+          >
+            <i class="fas fa-wine-glass-alt"></i>
+            <span>REFRI</span>
+          </button>
+          <button
+            class="flex-1 bg-white text-[#0f3a7d] font-bold text-xs py-2 rounded border border-[#0a2a5a] hover:bg-[#e0e7ff] transition flex items-center justify-center space-x-2"
+            id="btnCatCervejas"
+          >
+            <i class="fas fa-beer"></i>
+            <span>CERVEJAS</span>
+          </button>
+          <button
+            class="flex-1 bg-white text-[#0f3a7d] font-bold text-xs py-2 rounded border border-[#0a2a5a] hover:bg-[#e0e7ff] transition flex items-center justify-center space-x-2"
+            id="btnCatMercado"
+          >
+            <i class="fas fa-shopping-basket"></i>
+            <span>MERCADO</span>
+          </button>
+        </div>
+        <!-- Products grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3" id="produtosGrid"></div>
+      </section>
+      <!-- Estoque Section -->
+      <section
+        class="hidden flex-1 p-4 space-y-3 bg-white rounded border border-[#0a2a5a] overflow-auto max-h-[calc(100vh-120px)]"
+        id="estoqueSection"
+      >
+        <h2 class="text-[#0f3a7d] font-bold text-lg mb-4 select-text">Gestão de Estoque</h2>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button
+            class="px-4 py-2 bg-[#0a2a5a] text-white rounded hover:bg-[#0f3a7d] transition font-semibold"
+            id="btnCatTodos"
+          >
+            Todos
+          </button>
+          <button
+            class="px-4 py-2 bg-[#0a2a5a] text-white rounded hover:bg-[#0f3a7d] transition font-semibold"
+            id="btnCatRefriEstoque"
+          >
+            Refri
+          </button>
+          <button
+            class="px-4 py-2 bg-[#0a2a5a] text-white rounded hover:bg-[#0f3a7d] transition font-semibold"
+            id="btnCatCervejasEstoque"
+          >
+            Cervejas
+          </button>
+          <button
+            class="px-4 py-2 bg-[#0a2a5a] text-white rounded hover:bg-[#0f3a7d] transition font-semibold"
+            id="btnCatMercadoEstoque"
+          >
+            Mercado
+          </button>
+        </div>
+        <div class="space-y-3 max-h-[60vh] overflow-auto scrollbar-thin" id="estoqueLista"></div>
+      </section>
+      <!-- Comanda Section -->
+      <section
+        class="hidden flex-1 p-4 space-y-4 bg-white rounded border border-[#0a2a5a] overflow-auto max-h-[calc(100vh-120px)]"
+        id="comandaCardsContainer"
+      >
+        <h2 class="text-[#0f3a7d] font-bold text-lg mb-4 select-text">Comandas Finalizadas</h2>
+      </section>
+      <!-- Right side: Pedido -->
+      <aside class="w-full md:w-[400px] bg-[#0a2a5a] p-4 flex flex-col space-y-4 border-l border-[#0a2a5a]">
+        <form class="flex space-x-4 relative items-center">
+          <div class="flex-1 flex items-center">
+            <label class="block text-white text-xs font-semibold mb-1 mr-2" for="codigo">Mesa/Balcão</label>
+            <input
+              class="flex-1 rounded-l border border-[#0a2a5a] px-3 py-2 text-xs font-semibold text-[#0f3a7d]"
+              id="codigo"
+              placeholder="Selecione uma mesa ou balcão"
+              readonly
+              type="text"
+            />
+          </div>
+          <button
+            aria-label="Abrir seleção de mesas ou balcão"
+            class="bg-white border border-l-0 border-[#0a2a5a] rounded-r px-3 flex items-center justify-center hover:bg-gray-100 transition h-[34px] ml-2"
+            id="btnAbrirMesas"
+            type="button"
+          >
+            <i class="fas fa-search text-[#0f3a7d]"></i>
+          </button>
+        </form>
+        <div
+          class="flex-1 bg-white rounded border border-[#0a2a5a] overflow-auto scrollbar-thin max-h-[320px]"
+        >
+          <table class="w-full text-xs font-semibold text-[#0f3a7d] border-collapse">
+            <thead>
+              <tr class="bg-[#f97316] text-white">
+                <th class="text-left px-3 py-2">Imagem</th>
+                <th class="text-left px-3 py-2">Produto</th>
+                <th class="w-12 text-center">Qtde</th>
+                <th class="w-24 text-right pr-3">Unitário</th>
+                <th class="w-24 text-right pr-3">Total</th>
+              </tr>
+            </thead>
+            <tbody id="comandaBody">
+              <tr>
+                <td class="text-center text-gray-400 py-4 select-text" colspan="5">Nenhum item adicionado.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="text-white font-bold text-sm">
+          <div class="mb-2">Valor Total</div>
+          <div
+            class="bg-[#0f3a7d] rounded px-4 py-3 text-right text-3xl border border-[#0a2a5a] select-text"
+            id="valorTotal"
+          >
+            R$ 0,00
+          </div>
+        </div>
+        <div class="flex space-x-4">
+          <button
+            class="flex-1 bg-[#0f3a7d] border border-[#0a2a5a] rounded py-3 text-white font-semibold flex items-center justify-center space-x-3 hover:bg-[#0a2a5a] transition"
+            disabled
+            id="btnCancelar"
+            type="button"
+          >
+            <i class="fas fa-times-circle text-lg"></i>
+            <span>Cancelar</span>
+          </button>
+          <button
+            class="flex-1 bg-green-700 border border-green-800 rounded py-3 text-white font-semibold flex items-center justify-center space-x-3 hover:bg-green-800 transition"
+            disabled
+            id="btnFinalizar"
+            type="button"
+          >
+            <span>Finalizar</span>
+          </button>
+        </div>
+        <button
+          id="btnImprimirComanda"
+          class="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded transition flex items-center justify-center space-x-2"
+          type="button"
+        >
+          <i class="fas fa-print"></i>
+          <span>Imprimir</span>
+        </button>
+      </aside>
+    </div>
+    <!-- Footer -->
+    <footer
+      class="flex justify-between items-center bg-[#0a2a5a] rounded-b-lg px-6 py-2 text-white text-xs font-semibold select-none"
+    >
+      <div>Versão 2.0.0</div>
+      <div>Open-DCA 1.0.0</div>
+      <div>Impressora: Zebra</div>
+    </footer>
+  </div>
+  <script>
+    (() => {
+      const btnMesasOpen = document.getElementById("btnMesasOpen");
+      const btnAbrirMesas = document.getElementById("btnAbrirMesas");
+      const btnEstoque = document.getElementById("btnEstoque");
+      const btnVenda = document.getElementById("btnVenda");
+      const modalMesas = document.getElementById("modalMesas");
+      const btnFecharMesas = document.getElementById("btnFecharMesas");
+      const mesasGrid = modalMesas.querySelector("div.grid");
+      const codigoInput = document.getElementById("codigo");
+      const comandaBody = document.getElementById("comandaBody");
+      const valorTotalEl = document.getElementById("valorTotal");
+      const btnCancelar = document.getElementById("btnCancelar");
+      const btnFinalizar = document.getElementById("btnFinalizar");
+      const vendaSection = document.getElementById("vendaSection");
+      const estoqueSection = document.getElementById("estoqueSection");
+      const pedidoSection = document.getElementById("pedidoSection");
+      const estoqueLista = document.getElementById("estoqueLista");
+      const comandaCardsContainer = document.getElementById("comandaCardsContainer");
+      const produtosGrid = document.getElementById("produtosGrid");
+      const btnImprimirComanda = document.getElementById("btnImprimirComanda");
+      const btnAbrirComandaMesa = document.getElementById("btnAbrirComandaMesa");
+      const mesaStatusBadge = document.getElementById("mesaStatusBadge");
+
+      let mesaSelecionada = null;
+      let comanda = {};
+      const comandasFinalizadas = [];
+      const comandasGuardadas = {}; // Guarda múltiplas comandas por mesa/balcão
+      const timers = {}; // para cronômetros
+
+      // Categorias e dados atualizados
+      const estoqueDados = {
+        refri: [
+          { id: 1, nome: "ÁGUA MINERAL", preco: 2.0, estoque: 50, img: "https://placehold.co/80x80/png?text=Água+Mineral" },
+          { id: 8, nome: "REFRIGERANTE", preco: 6.0, estoque: 60, img: "https://placehold.co/80x80/png?text=Refrigerante" },
+          { id: 9, nome: "SUCO NATURAL", preco: 3.0, estoque: 30, img: "https://placehold.co/80x80/png?text=Suco+Natural" },
+          { id: 10, nome: "ÁGUA COM GÁS", preco: 2.5, estoque: 45, img: "https://placehold.co/80x80/png?text=Água+com+Gás" },
+          { id: 13, nome: "CHÁ GELADO", preco: 4.0, estoque: 40, img: "https://placehold.co/80x80/png?text=Chá+Gelado" },
+          { id: 14, nome: "ÁGUA DE COCO", preco: 6.0, estoque: 25, img: "https://placehold.co/80x80/png?text=Água+de+Coco" },
+          { id: 15, nome: "LEITE", preco: 3.5, estoque: 50, img: "https://placehold.co/80x80/png?text=Leite" }
+        ],
+        cervejas: [
+          { id: 6, nome: "CERVEJA", preco: 5.0, estoque: 40, img: "https://placehold.co/80x80/png?text=Cerveja" },
+          { id: 7, nome: "VINHO TINTO", preco: 15.0, estoque: 25, img: "https://placehold.co/80x80/png?text=Vinho+Tinto" },
+          { id: 11, nome: "ENERGÉTICO", preco: 7.0, estoque: 20, img: "https://placehold.co/80x80/png?text=Energético" },
+          { id: 12, nome: "CAFÉ GELADO", preco: 5.0, estoque: 35, img: "https://placehold.co/80x80/png?text=Café+Gelado" }
+        ],
+        mercado: [
+          { id: 2, nome: "BALA", preco: 0.1, estoque: 100, img: "https://placehold.co/80x80/png?text=Bala" },
+          { id: 3, nome: "BOLINHA DE QUEIJO", preco: 8.0, estoque: 30, img: "https://placehold.co/80x80/png?text=Bolinha+de+Queijo" },
+          { id: 4, nome: "BOLO DE CHOCOLATE", preco: 10.0, estoque: 20, img: "https://placehold.co/80x80/png?text=Bolo+de+Chocolate" },
+          { id: 5, nome: "BOLO DE MORANGO", preco: 9.5, estoque: 15, img: "https://placehold.co/80x80/png?text=Bolo+de+Morango" },
+          { id: 16, nome: "PÃO FRANCÊS", preco: 0.5, estoque: 100, img: "https://placehold.co/80x80/png?text=Pão+Francês" },
+          { id: 17, nome: "ARROZ", preco: 20.0, estoque: 40, img: "https://placehold.co/80x80/png?text=Arroz" },
+          { id: 18, nome: "FEIJÃO", preco: 15.0, estoque: 35, img: "https://placehold.co/80x80/png?text=Feijão" },
+          { id: 19, nome: "MACARRÃO", preco: 8.0, estoque: 50, img: "https://placehold.co/80x80/png?text=Macarrão" },
+          { id: 20, nome: "AÇÚCAR", preco: 5.0, estoque: 60, img: "https://placehold.co/80x80/png?text=Açúcar" },
+          { id: 21, nome: "CAFÉ EM PÓ", preco: 12.0, estoque: 30, img: "https://placehold.co/80x80/png?text=Café+em+Pó" },
+          { id: 22, nome: "ÓLEO DE SOJA", preco: 7.0, estoque: 45, img: "https://placehold.co/80x80/png?text=Óleo+de+Soja" },
+          { id: 23, nome: "SAL", preco: 3.0, estoque: 70, img: "https://placehold.co/80x80/png?text=Sal" },
+          { id: 24, nome: "MANTEIGA", preco: 10.0, estoque: 25, img: "https://placehold.co/80x80/png?text=Manteiga" },
+          { id: 25, nome: "LEITE CONDENSADO", preco: 6.0, estoque: 40, img: "https://placehold.co/80x80/png?text=Leite+Condensado" },
+          { id: 26, nome: "ACHOCOLATADO", preco: 8.0, estoque: 30, img: "https://placehold.co/80x80/png?text=Achocolatado" },
+          { id: 27, nome: "BISCOITOS", preco: 4.0, estoque: 50, img: "https://placehold.co/80x80/png?text=Biscoitos" },
+          { id: 28, nome: "CAFÉ SOLÚVEL", preco: 10.0, estoque: 20, img: "https://placehold.co/80x80/png?text=Café+Solúvel" },
+          { id: 29, nome: "FARINHA DE TRIGO", preco: 7.0, estoque: 60, img: "https://placehold.co/80x80/png?text=Farinha+de+Trigo" },
+          { id: 30, nome: "LEITE EM PÓ", preco: 15.0, estoque: 30, img: "https://placehold.co/80x80/png?text=Leite+em+Pó" },
+          { id: 31, nome: "MOLHO DE TOMATE", preco: 5.0, estoque: 40, img: "https://placehold.co/80x80/png?text=Molho+de+Tomate" }
+        ]
+      };
+
+      // Gerar 20 mesas no modal + Balcão já adicionado no HTML
+      function gerarMesas() {
+        mesasGrid.innerHTML = "";
+        for (let i = 1; i <= 20; i++) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className =
+            "relative px-3 py-2 rounded border border-[#0f3a7d] hover:bg-[#0f3a7d] hover:text-white transition font-semibold text-[#0f3a7d] flex items-center justify-between";
+          btn.dataset.mesa = i;
+          btn.textContent = "Mesa " + i;
+
+          // Se a mesa tem comanda guardada, adiciona o cronômetro e aviso
+          if (comandasGuardadas["Mesa " + i]) {
+            const timerSpan = document.createElement("span");
+            timerSpan.className = "timer ml-2";
+            timerSpan.textContent = "00:00:00";
+            btn.appendChild(timerSpan);
+            iniciarCronometro("Mesa " + i, timerSpan);
+          }
+
+          btn.addEventListener("click", () => {
+            selecionarMesa("Mesa " + i);
+            fecharModal();
+          });
+          mesasGrid.appendChild(btn);
+        }
+      }
+
+      // Inicia cronômetro para a mesa com comanda guardada
+      function iniciarCronometro(mesa, element) {
+        if (timers[mesa]) return; // já iniciado
+
+        // Se não existir, cria timestamp inicial
+        if (!comandasGuardadas[mesa].timestamp) {
+          comandasGuardadas[mesa].timestamp = Date.now();
+        }
+
+        function atualizar() {
+          const agora = Date.now();
+          const diff = agora - comandasGuardadas[mesa].timestamp;
+          const segundos = Math.floor(diff / 1000) % 60;
+          const minutos = Math.floor(diff / (1000 * 60)) % 60;
+          const horas = Math.floor(diff / (1000 * 60 * 60));
+          element.textContent =
+            String(horas).padStart(2, "0") + ":" +
+            String(minutos).padStart(2, "0") + ":" +
+            String(segundos).padStart(2, "0");
+        }
+        atualizar();
+        timers[mesa] = setInterval(atualizar, 1000);
+      }
+
+      // Para cronômetro de uma mesa
+      function pararCronometro(mesa) {
+        if (timers[mesa]) {
+          clearInterval(timers[mesa]);
+          delete timers[mesa];
+        }
+      }
+
+      // Atualiza badge de status da mesa (exibe se tem comanda guardada)
+      function atualizarBadgeMesa() {
+        if (mesaSelecionada && comandasGuardadas[mesaSelecionada]) {
+          mesaStatusBadge.classList.remove("hidden");
+          btnAbrirComandaMesa.disabled = false;
+        } else {
+          mesaStatusBadge.classList.add("hidden");
+          btnAbrirComandaMesa.disabled = true;
+        }
+      }
+
+      // Renderizar lista de estoque
+      function renderizarEstoque(categoria) {
+        estoqueLista.innerHTML = "";
+        let itens = [];
+        if (categoria === "todos") {
+          itens = [...estoqueDados.refri, ...estoqueDados.cervejas, ...estoqueDados.mercado];
+        } else {
+          itens = estoqueDados[categoria];
+        }
+        itens.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between border border-gray-300 rounded p-2";
+          div.innerHTML = `
+            <div class="flex items-center space-x-3">
+              <img src="${item.img}" alt="Imagem do produto ${item.nome}, embalagem padrão" class="w-10 h-10 rounded object-cover" />
+              <div>
+                <div class="font-semibold text-[#0f3a7d]">${item.nome}</div>
+                <div class="text-sm text-gray-600">Preço: R$ ${item.preco.toFixed(2).replace('.', ',')}</div>
+              </div>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition" data-id="${item.id}" data-categoria="${categoria}" data-action="decrementar">-</button>
+              <span class="w-8 text-center font-semibold text-[#0f3a7d]" id="estoque-qty-${categoria}-${item.id}">${item.estoque}</span>
+              <button class="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition" data-id="${item.id}" data-categoria="${categoria}" data-action="incrementar">+</button>
+            </div>
+          `;
+          estoqueLista.appendChild(div);
+        });
+
+        // Adicionar eventos aos botões de controle de estoque
+        estoqueLista.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = parseInt(btn.dataset.id);
+            const categoriaBtn = btn.dataset.categoria;
+            const action = btn.dataset.action;
+            let item;
+            if (categoriaBtn === "todos") {
+              item = estoqueDados.refri.find((i) => i.id === id) || estoqueDados.cervejas.find((i) => i.id === id) || estoqueDados.mercado.find((i) => i.id === id);
+            } else {
+              item = estoqueDados[categoriaBtn].find((i) => i.id === id);
+            }
+            if (!item) return;
+            if (action === "incrementar") {
+              item.estoque++;
+            } else if (action === "decrementar" && item.estoque > 0) {
+              item.estoque--;
+            }
+            const spanId = `estoque-qty-${categoriaBtn}-${id}`;
+            const span = document.getElementById(spanId);
+            if (span) {
+              span.textContent = item.estoque;
+            }
+            if (categoriaBtn !== "todos") {
+              const spanTodos = document.getElementById(`estoque-qty-todos-${id}`);
+              if (spanTodos) {
+                spanTodos.textContent = item.estoque;
+              }
+            }
+          });
+        });
+      }
+
+      // Renderizar produtos na aba venda
+      function renderizarProdutos(categoria) {
+        produtosGrid.innerHTML = "";
+        let itens = [];
+        if (categoria === "refri") {
+          itens = estoqueDados.refri;
+        } else if (categoria === "cervejas") {
+          itens = estoqueDados.cervejas;
+        } else if (categoria === "mercado") {
+          itens = estoqueDados.mercado;
+        } else if (categoria === "todos") {
+          itens = [...estoqueDados.refri, ...estoqueDados.cervejas, ...estoqueDados.mercado];
+        } else {
+          itens = [];
+        }
+        itens.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "cursor-pointer rounded border border-[#0a2a5a] bg-white p-2 flex flex-col items-center justify-center hover:bg-[#e0e7ff] transition select-none";
+          div.dataset.name = item.nome;
+          div.dataset.price = item.preco;
+          div.dataset.img = item.img;
+          div.innerHTML = `
+            <img src="${item.img}" alt="Imagem do produto ${item.nome}, embalagem padrão" class="w-16 h-16 object-cover mb-2 rounded" />
+            <span class="text-xs font-semibold text-[#0f3a7d] text-center">${item.nome}</span>
+            <span class="text-xs text-gray-700">R$ ${item.preco.toFixed(2).replace('.', ',')}</span>
+          `;
+          div.addEventListener("click", () => {
+            adicionarProduto({ name: item.nome, price: item.preco, img: item.img }, 1);
+          });
+          produtosGrid.appendChild(div);
+        });
+      }
+
+      function abrirModal() {
+        modalMesas.classList.remove("hidden");
+        gerarMesas();
+      }
+      function fecharModal() {
+        modalMesas.classList.add("hidden");
+      }
+
+      function selecionarMesa(nome) {
+        mesaSelecionada = nome;
+        codigoInput.value = nome;
+        if (!comanda[mesaSelecionada]) {
+          comanda[mesaSelecionada] = [];
+        }
+        atualizarComanda();
+        habilitarControles(true);
+        atualizarBadgeMesa();
+      }
+
+      function habilitarControles(ativo) {
+        btnCancelar.disabled = !ativo;
+        btnFinalizar.disabled = !ativo;
+      }
+
+      function atualizarComanda() {
+        if (!mesaSelecionada || !comanda[mesaSelecionada]) {
+          comandaBody.innerHTML =
+            '<tr><td colspan="5" class="text-center text-gray-400 py-4 select-text">Nenhuma mesa ou balcão selecionado.</td></tr>';
+          valorTotalEl.textContent = "R$ 0,00";
+          habilitarControles(false);
+          return;
+        }
+        const itens = comanda[mesaSelecionada];
+        if (itens.length === 0) {
+          comandaBody.innerHTML =
+            '<tr><td colspan="5" class="text-center text-gray-400 py-4 select-text">Nenhum item adicionado.</td></tr>';
+          valorTotalEl.textContent = "R$ 0,00";
+          habilitarControles(true);
+          return;
+        }
+        let total = 0;
+        comandaBody.innerHTML = "";
+        itens.forEach((item) => {
+          const tr = document.createElement("tr");
+          tr.className = "border-b border-[#f97316]";
+
+          const totalItem = item.price * item.qtde;
+          total += totalItem;
+
+          tr.innerHTML = `
+            <td class="px-3 py-2">
+              <img src="${item.img || 'https://placehold.co/40x40/png?text=Sem+Imagem'}" alt="Imagem do produto ${item.name}, embalagem padrão" class="w-10 h-10 rounded object-cover" />
+            </td>
+            <td class="text-left px-3 py-2">${item.name}</td>
+            <td class="text-center">${item.qtde}</td>
+            <td class="text-right pr-3">R$ ${item.price.toFixed(2).replace('.', ',')}</td>
+            <td class="text-right pr-3">R$ ${totalItem.toFixed(2).replace('.', ',')}</td>
+          `;
+          comandaBody.appendChild(tr);
+        });
+        valorTotalEl.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+      }
+
+      // Adicionar produto à comanda da mesa selecionada
+      function adicionarProduto(produto, quantidade) {
+        if (!mesaSelecionada) {
+          alert("Selecione uma mesa ou balcão antes de adicionar itens.");
+          return;
+        }
+        const itens = comanda[mesaSelecionada];
+        const index = itens.findIndex((i) => i.name === produto.name);
+        if (index >= 0) {
+          itens[index].qtde += quantidade;
+          if (itens[index].qtde < 1) itens[index].qtde = 1;
+        } else {
+          itens.push({ ...produto, qtde: quantidade });
+        }
+        atualizarComanda();
+      }
+
+      // Função para imprimir a comanda atual
+      function imprimirComanda() {
+        if (!mesaSelecionada || !comanda[mesaSelecionada] || comanda[mesaSelecionada].length === 0) {
+          alert("Nenhuma comanda para imprimir.");
+          return;
+        }
+        const itens = comanda[mesaSelecionada];
+        let texto = `Comanda - ${mesaSelecionada}\n\n`;
+        let total = 0;
+        itens.forEach(item => {
+          const totalItem = item.price * item.qtde;
+          total += totalItem;
+          texto += `${item.name} - Qtde: ${item.qtde} x R$ ${item.price.toFixed(2).replace('.', ',')} = R$ ${totalItem.toFixed(2).replace('.', ',')}\n`;
+        });
+        texto += `\nTotal: R$ ${total.toFixed(2).replace('.', ',')}`;
+
+        const printWindow = window.open('', '', 'width=400,height=600');
+        printWindow.document.write('<pre style="font-family:sans-serif; font-size:16px;">' + texto + '</pre>');
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+      }
+
+      // Botão abrir modal mesas
+      btnMesasOpen.addEventListener("click", abrirModal);
+      btnAbrirMesas.addEventListener("click", abrirModal);
+      btnFecharMesas.addEventListener("click", fecharModal);
+
+      // Botão cancelar pedido (limpar comanda da mesa)
+      btnCancelar.addEventListener("click", () => {
+        if (!mesaSelecionada) return;
+        if (confirm(`Deseja cancelar todos os itens da ${mesaSelecionada}?`)) {
+          comanda[mesaSelecionada] = [];
+          atualizarComanda();
+          atualizarBadgeMesa();
+        }
+      });
+
+      // Botão finalizar pedido (limpar comanda da mesa e armazenar card)
+      btnFinalizar.addEventListener("click", () => {
+        if (!mesaSelecionada) return;
+        if (confirm(`Deseja finalizar o pedido da ${mesaSelecionada}?`)) {
+          armazenarComandaCard(mesaSelecionada, comanda[mesaSelecionada]);
+          comanda[mesaSelecionada] = [];
+          atualizarBadgeMesa();
+          mesaSelecionada = null;
+          codigoInput.value = "";
+          atualizarComanda();
+          habilitarControles(false);
+          selecionarMesa("Balcão");
+          mostrarComandas();
+        }
+      });
+
+      // Botão imprimir comanda
+      btnImprimirComanda.addEventListener("click", imprimirComanda);
+
+      // Botão abrir comanda guardada da mesa
+      btnAbrirComandaMesa.addEventListener("click", () => {
+        if (!mesaSelecionada) {
+          alert("Selecione uma mesa ou balcão primeiro.");
+          return;
+        }
+        const guardada = comandasGuardadas[mesaSelecionada];
+        if (!guardada) {
+          alert("Nenhuma comanda guardada para esta mesa.");
+          return;
+        }
+        comanda[mesaSelecionada] = JSON.parse(JSON.stringify(guardada)); // Clonar
+        atualizarComanda();
+        habilitarControles(true);
+        alert(`Comanda da ${mesaSelecionada} carregada.`);
+      });
+
+      // Armazenar comandas finalizadas com botão Guardar que adiciona a comanda ao botão Comanda
+      function armazenarComandaCard(mesa, itens) {
+        if (!itens || itens.length === 0) return;
+        const card = document.createElement("div");
+        card.className = "border border-[#0f3a7d] rounded p-4 shadow-md relative";
+
+        let itensHtml = "";
+        let total = 0;
+        itens.forEach((item) => {
+          const totalItem = item.price * item.qtde;
+          total += totalItem;
+          itensHtml += `
+            <div class="flex items-center space-x-3 mb-2">
+              <img src="${item.img || 'https://placehold.co/40x40/png?text=Sem+Imagem'}" alt="Imagem do produto ${item.name}, embalagem padrão" class="w-10 h-10 rounded object-cover" />
+              <div class="flex-1">
+                <div class="font-semibold text-[#0f3a7d]">${item.name}</div>
+                <div class="text-sm text-gray-600">Qtd: ${item.qtde} x R$ ${item.price.toFixed(2).replace('.', ',')}</div>
+              </div>
+              <div class="font-semibold text-[#0f3a7d]">R$ ${totalItem.toFixed(2).replace('.', ',')}</div>
+            </div>
+          `;
+        });
+
+        card.innerHTML = `
+          <h3 class="text-lg font-bold text-[#0f3a7d] mb-3 select-text">Comanda - ${mesa}</h3>
+          ${itensHtml}
+          <div class="text-right font-bold text-[#0f3a7d] border-t border-gray-300 pt-2 mb-4">Total: R$ ${total.toFixed(2).replace('.', ',')}</div>
+          <button type="button" class="absolute top-4 right-4 bg-[#2563eb] hover:bg-[#1e40af] text-white text-xs font-semibold px-3 py-1 rounded shadow transition" aria-label="Guardar comanda">
+            Guardar
+          </button>
+        `;
+
+        // Botão Guardar funcionalidade: guarda a comanda no objeto comandasGuardadas por mesa/balcão, fecha o card e modal
+        const btnGuardar = card.querySelector("button");
+        btnGuardar.addEventListener("click", () => {
+          comandasGuardadas[mesa] = JSON.parse(JSON.stringify(itens)); // Clonar para evitar referência
+          comandasGuardadas[mesa].timestamp = Date.now();
+          btnAbrirComandaMesa.disabled = false;
+          alert(`Comanda da ${mesa} guardada com sucesso!`);
+          fecharModal();
+          // Remover o card da lista de comandas finalizadas
+          const index = comandasFinalizadas.indexOf(card);
+          if (index > -1) {
+            comandasFinalizadas.splice(index, 1);
+          }
+          mostrarComandas();
+          atualizarBadgeMesa();
+        });
+
+        comandasFinalizadas.push(card);
+      }
+
+      function mostrarComandas() {
+        comandaCardsContainer.innerHTML = "";
+        if (comandasFinalizadas.length === 0) {
+          comandaCardsContainer.innerHTML =
+            '<p class="text-gray-500 select-text">Nenhuma comanda finalizada.</p>';
+          comandaCardsContainer.classList.add("hidden");
+          vendaSection.classList.remove("hidden");
+          estoqueSection.classList.add("hidden");
+          if(pedidoSection) pedidoSection.classList.remove("hidden");
+          return;
+        }
+        comandasFinalizadas.forEach((card) => {
+          comandaCardsContainer.appendChild(card);
+        });
+        comandaCardsContainer.classList.remove("hidden");
+        vendaSection.classList.add("hidden");
+        estoqueSection.classList.add("hidden");
+        if(pedidoSection) pedidoSection.classList.add("hidden");
+      }
+
+      // Controle de abas
+      btnEstoque.addEventListener("click", () => {
+        vendaSection.classList.add("hidden");
+        estoqueSection.classList.remove("hidden");
+        if(pedidoSection) pedidoSection.classList.add("hidden");
+        comandaCardsContainer.classList.add("hidden");
+        btnEstoque.classList.add("text-[#f97316]");
+        btnVenda.classList.remove("text-[#f97316]");
+      });
+
+      btnVenda.addEventListener("click", () => {
+        vendaSection.classList.remove("hidden");
+        estoqueSection.classList.add("hidden");
+        if(pedidoSection) pedidoSection.classList.remove("hidden");
+        comandaCardsContainer.classList.add("hidden");
+        btnEstoque.classList.remove("text-[#f97316]");
+        btnVenda.classList.add("text-[#f97316]");
+      });
+
+      // Inicialização
+      gerarMesas();
+      selecionarMesa("Balcão");
+      habilitarControles(true);
+      atualizarComanda();
+      renderizarEstoque("refri");
+      renderizarProdutos("refri");
+      atualizarBadgeMesa();
+
+      // Expose functions for modal buttons
+      window.selecionarMesa = selecionarMesa;
+      window.fecharModal = fecharModal;
+    })();
+  </script>
+</body>
+</html>
